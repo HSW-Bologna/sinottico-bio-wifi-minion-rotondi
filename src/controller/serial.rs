@@ -37,6 +37,7 @@ pub fn send_command(
     port.write(&buffer[0..len])
         .map_err(|_| String::from("Errore sulla porta"))?;
     let now = Instant::now();
+    let expected_len = expected_response_len(code) as usize;
 
     while port.bytes_to_read().unwrap() < expected_response_len(code) {
         if Instant::now().duration_since(now) > Duration::from_millis(200) {
@@ -45,9 +46,9 @@ pub fn send_command(
         //log::info!("{}", port.bytes_to_read().unwrap());
         thread::sleep(Duration::from_millis(10));
     }
-    let mut read_buffer: [u8; 15] = [0; 15];
+    let mut read_buffer: [u8; 32] = [0; 32];
     let read_len = port
-        .read(&mut read_buffer)
+        .read(&mut read_buffer[0..expected_len])
         .map_err(|_| String::from("Errore sulla porta"))?;
 
     if let Some(resp) = Response::parse(&mut read_buffer[0..read_len]) {

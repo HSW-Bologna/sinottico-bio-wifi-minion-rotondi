@@ -58,7 +58,7 @@ impl Controller {
                 match msg {
                     ConnectToPort(port) => {
                         let builder = serialport::new(port.clone(), 9600)
-                            .timeout(Duration::from_millis(5000))
+                            .timeout(Duration::from_millis(20))
                             .stop_bits(serialport::StopBits::One)
                             .data_bits(serialport::DataBits::Eight);
                         match builder.open() {
