@@ -7,10 +7,11 @@ pub const PREAMBLE: u8 = 0x02;
 pub const HEADER_LENGTH: usize = 15;
 pub const RESPONSE_HEADER_LENGTH: usize = 14;
 
-const CODE_U16: [(u16, Code); 3] = [
+const CODE_U16: [(u16, Code); 4] = [
     (0x0101, Code::ReadInput),
     (0xFF01, Code::SetOutput),
     (0xFF03, Code::SetAddress),
+    (0x400A, Code::ReadFWVersion),
 ];
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -18,6 +19,7 @@ pub enum Code {
     ReadInput,
     SetOutput,
     SetAddress,
+    ReadFWVersion,
     Unknown(u8, u8),
 }
 

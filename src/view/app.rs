@@ -30,6 +30,8 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let model = { self.model.lock().unwrap().clone() };
 
+        let destination = u32::from_str_radix(self.device_address.as_str(), 16);
+
         egui::TopBottomPanel::top(0).show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 8.;
 
@@ -64,29 +66,58 @@ impl eframe::App for App {
             });
         });
 
-        egui::TopBottomPanel::bottom(1).default_height(128.).show(ctx, |ui| {
-            egui::ScrollArea::vertical()
-                .stick_to_bottom()
-                .max_height(128.)
-                .show(ui, |ui| {
-                    for m in &model.messages {
-                        ui.add_sized([ui.available_width(), 8.], egui::Label::new(m));
-                    }
-                });
-        });
+        egui::TopBottomPanel::bottom(1)
+            .default_height(128.)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .stick_to_bottom()
+                    .auto_shrink([false, false])
+                    .max_height(64.)
+                    .show(ui, |ui| {
+                        ui.with_layout(Layout::top_down_justified(egui::Align::LEFT), |ui| {
+                            for m in &model.messages {
+                                ui.add(egui::Label::new(m));
+                            }
+                        })
+                    });
+            });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if model.is_connected() {
-                if ui.text_edit_singleline(&mut self.device_address).changed() {
-                    self.manage_address_input();
-                }
+                ui.horizontal(|ui| {
+                    ui.add(egui::Label::new("Matricola"));
+                    if ui.text_edit_singleline(&mut self.device_address).changed() {
+                        self.manage_address_input();
+                    }
+                    ui.add_enabled_ui(self.is_address_valid(), |ui| {
+                        if ui.button("Imposta").clicked() {
+                            self.controller
+                                .send(Message::SetSerialNumber(destination.clone().unwrap()))
+                                .ok();
+                        }
+                    });
+                });
+
+                ui.horizontal(|ui| {
+                    ui.add(egui::Label::new(format!(
+                        "Versione firmware: {}",
+                        if let Some((fw1, fw2, fw3)) = model.version {
+                            format!("{}.{}.{}", fw1, fw2, fw3)
+                        } else {
+                            "assente".into()
+                        }
+                    )));
+                    if ui.add(egui::Button::new("Leggi")).clicked() {
+                        self.controller
+                            .send(Message::ReadFWVersion(destination.clone().unwrap()))
+                            .ok();
+                    }
+                });
 
                 ui.add_enabled_ui(self.is_address_valid(), |ui| {
                     if ui.button("Collauda").clicked() {
                         self.controller
-                            .send(Message::Test(
-                                u32::from_str_radix(self.device_address.as_str(), 16).unwrap(),
-                            ))
+                            .send(Message::Test(destination.clone().unwrap()))
                             .ok();
                     }
                 });

@@ -13,6 +13,7 @@ pub struct Model {
     pub ports: Vec<String>,
     pub connection: Connection,
     pub messages: SDeque<String, 8>,
+    pub version: Option<(u8, u8, u8)>,
 }
 
 impl Default for Model {
@@ -21,6 +22,7 @@ impl Default for Model {
             ports: Vec::new(),
             connection: Connection::Disconnected,
             messages: SDeque::default(),
+            version: None,
         }
     }
 }
@@ -42,7 +44,7 @@ impl Model {
 
         self.messages
             .push_back(format!(
-                "[{}] {}",
+                "[{:<8}] {}",
                 OffsetDateTime::from(SystemTime::now())
                     .format(&format)
                     .unwrap(),

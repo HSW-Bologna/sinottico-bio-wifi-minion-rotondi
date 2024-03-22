@@ -76,6 +76,31 @@ impl Controller {
                         }
                     }
 
+                    ReadFWVersion(address) => {
+                        let destination = u32::to_be_bytes(address);
+                        match self.read_firmware_version(destination) {
+                            Ok(fw @ (fw1, fw2, fw3)) => {
+                                self.modify_model(|m| m.version = Some(fw));
+                                self.notify(format!("Versione firmware {}.{}.{}", fw1, fw2, fw3));
+                            }
+                            Err(e) => {
+                                self.notify(e);
+                                self.notify("Versione firmware non recuperata".into());
+                            }
+                        }
+                    }
+
+                    SetSerialNumber(address) => {
+                        let destination = u32::to_be_bytes(address);
+                        match self.set_serial_number(destination) {
+                            Ok(()) => self.notify("Numero di matricola impostato".into()),
+                            Err(e) => {
+                                self.notify(e);
+                                self.notify("Impostazione fallita".into());
+                            }
+                        }
+                    }
+
                     Test(address) => {
                         let destination = u32::to_be_bytes(address);
                         match self.test_device(destination) {
@@ -98,6 +123,31 @@ impl Controller {
 
     fn notify(self: &Self, msg: String) {
         self.modify_model(|m| m.message(msg.clone()))
+    }
+
+    fn read_firmware_version(self: &Self, destination: [u8; 4]) -> Result<(u8, u8, u8), String> {
+        if let Some(ref mut port) = self.port.borrow_mut().as_mut() {
+            let resp = serial::send_command(port, Code::SetAddress, destination, &destination)
+                .map_err(|e| format!("Leggi firmware: {}", e))?;
+
+            if resp.data_len > 3 {
+                Ok((resp.data[0], resp.data[1], resp.data[2]))
+            } else {
+                Err(String::from("Risposta non valida"))
+            }
+        } else {
+            Err(String::from("Nessuna porta connessa!"))
+        }
+    }
+
+    fn set_serial_number(self: &Self, destination: [u8; 4]) -> Result<(), String> {
+        if let Some(ref mut port) = self.port.borrow_mut().as_mut() {
+            serial::send_command(port, Code::SetAddress, destination, &destination)
+                .map_err(|e| format!("Imposta codice: {}", e))?;
+            Ok(())
+        } else {
+            Err(String::from("Nessuna porta connessa!"))
+        }
     }
 
     fn test_device(self: &Self, destination: [u8; 4]) -> Result<(), String> {
@@ -125,9 +175,6 @@ impl Controller {
         }
 
         if let Some(ref mut port) = self.port.borrow_mut().as_mut() {
-            serial::send_command(port, Code::SetAddress, destination, &destination)
-                .map_err(|e| format!("Imposta codice: {}", e))?;
-
             for i in 0..4 {
                 serial::send_command(port, Code::SetOutput, destination, &[i, 0])
                     .map_err(|e| format!("Spegni rele {}: {}", i, e))?;
