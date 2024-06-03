@@ -1,10 +1,8 @@
 use super::Message;
-use crate::model::{Connection, Model};
+use crate::model::{Connection, Model, DEFAULT_ADDRESS};
 use egui::Layout;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-
-const DEFAULT_ADDRESS: &str = "14030100";
 
 pub struct App {
     model: Arc<Mutex<Model>>,
@@ -20,8 +18,8 @@ impl App {
             model,
             controller,
             selected_port: String::new(),
-            valid_device_address: String::from(DEFAULT_ADDRESS),
             device_address: String::from(DEFAULT_ADDRESS),
+            valid_device_address: String::from(DEFAULT_ADDRESS),
         }
     }
 }
@@ -30,7 +28,7 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let model = { self.model.lock().unwrap().clone() };
 
-        let destination = u32::from_str_radix(self.device_address.as_str(), 16);
+        let destination = u32::from_str_radix(model.device_address.as_str(), 16);
 
         egui::TopBottomPanel::top(0).show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 8.;
@@ -86,8 +84,10 @@ impl eframe::App for App {
             if model.is_connected() {
                 ui.horizontal(|ui| {
                     ui.add(egui::Label::new("Matricola"));
+                    self.device_address = model.device_address;
                     if ui.text_edit_singleline(&mut self.device_address).changed() {
-                        self.manage_address_input();
+                        let next_value = Message::DeviceAddress(self.manage_address_input());
+                        self.controller.send(next_value).ok();
                     }
                     ui.add_enabled_ui(self.is_address_valid(), |ui| {
                         if ui.button("Imposta").clicked() {
@@ -96,6 +96,11 @@ impl eframe::App for App {
                                 .ok();
                         }
                     });
+                    if ui.add(egui::Button::new("Leggi")).clicked() {
+                        self.controller
+                            .send(Message::ReadSerialNumber(destination.clone().unwrap()))
+                            .ok();
+                    }
                 });
 
                 ui.horizontal(|ui| {
@@ -131,12 +136,14 @@ impl App {
         u32::from_str_radix(self.device_address.as_str(), 16).is_ok()
     }
 
-    fn manage_address_input(self: &mut Self) {
+    fn manage_address_input(self: &mut Self) -> String {
         if self.device_address.len() > 0 {
             match u32::from_str_radix(self.device_address.as_str(), 16) {
-                Ok(_) => self.valid_device_address = self.device_address.clone(),
-                Err(_) => self.device_address = self.valid_device_address.clone(),
+                Ok(_) => self.device_address.clone(),
+                Err(_) => self.valid_device_address.clone(),
             }
+        } else {
+            self.valid_device_address.clone()
         }
     }
 }

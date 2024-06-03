@@ -1,4 +1,4 @@
-use super::mblp::{Code, Command, Response,expected_response_len};
+use super::mblp::{expected_response_len, Code, Command, Response};
 use serialport::{available_ports, SerialPort};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -49,7 +49,7 @@ pub fn send_command(
     let mut read_buffer: [u8; 32] = [0; 32];
     let read_len = port
         .read(&mut read_buffer[0..expected_len])
-        .map_err(|_| String::from("Errore sulla porta"))?;
+        .map_err(|e| format!("Errore sulla porta: {:?}", e))?;
 
     if let Some(resp) = Response::parse(&mut read_buffer[0..read_len]) {
         Ok(resp)

@@ -58,7 +58,7 @@ impl Controller {
                 match msg {
                     ConnectToPort(port) => {
                         let builder = serialport::new(port.clone(), 9600)
-                            .timeout(Duration::from_millis(20))
+                            .timeout(Duration::from_millis(100))
                             .stop_bits(serialport::StopBits::One)
                             .data_bits(serialport::DataBits::Eight);
                         match builder.open() {
@@ -68,6 +68,19 @@ impl Controller {
                                     m.connection = Connection::Connected(port.clone());
                                 });
                                 self.notify("Connesso!".into());
+
+                                match self.read_serial_number([0; 4]) {
+                                    Ok(sn) => {
+                                        self.modify_model(|m| {
+                                            m.device_address = format!("{:08X}", sn)
+                                        });
+                                        self.notify(format!("Indirizzo 0x{:08X}", sn));
+                                    }
+                                    Err(e) => {
+                                        self.notify(e);
+                                        self.notify("Indirizzo non recuperata".into());
+                                    }
+                                }
                             }
                             Err(e) => {
                                 log::warn!("Port connection error: {:?}", e);
@@ -90,6 +103,20 @@ impl Controller {
                         }
                     }
 
+                    ReadSerialNumber(address) => {
+                        let destination = u32::to_be_bytes(address);
+                        match self.read_serial_number(destination) {
+                            Ok(sn) => {
+                                self.modify_model(|m| m.device_address = format!("{:08X}", sn));
+                                self.notify(format!("Indirizzo 0x{:08X}", sn));
+                            }
+                            Err(e) => {
+                                self.notify(e);
+                                self.notify("Indirizzo non recuperata".into());
+                            }
+                        }
+                    }
+
                     SetSerialNumber(address) => {
                         let destination = u32::to_be_bytes(address);
                         match self.set_serial_number(destination) {
@@ -99,6 +126,10 @@ impl Controller {
                                 self.notify("Impostazione fallita".into());
                             }
                         }
+                    }
+
+                    DeviceAddress(address) => {
+                        self.modify_model(|m| m.device_address = address.clone());
                     }
 
                     Test(address) => {
@@ -127,11 +158,31 @@ impl Controller {
 
     fn read_firmware_version(self: &Self, destination: [u8; 4]) -> Result<(u8, u8, u8), String> {
         if let Some(ref mut port) = self.port.borrow_mut().as_mut() {
-            let resp = serial::send_command(port, Code::SetAddress, destination, &destination)
+            let resp = serial::send_command(port, Code::ReadFWVersion, destination, &destination)
                 .map_err(|e| format!("Leggi firmware: {}", e))?;
 
             if resp.data_len > 3 {
                 Ok((resp.data[0], resp.data[1], resp.data[2]))
+            } else {
+                Err(String::from("Risposta non valida"))
+            }
+        } else {
+            Err(String::from("Nessuna porta connessa!"))
+        }
+    }
+
+    fn read_serial_number(self: &Self, destination: [u8; 4]) -> Result<u32, String> {
+        if let Some(ref mut port) = self.port.borrow_mut().as_mut() {
+            let resp = serial::send_command(port, Code::ReadAddress, destination, &destination)
+                .map_err(|e| format!("Leggi indirizzo: {}", e))?;
+
+            if resp.data_len > 3 {
+                Ok(u32::from_be_bytes([
+                    resp.data[0],
+                    resp.data[1],
+                    resp.data[2],
+                    resp.data[3],
+                ]))
             } else {
                 Err(String::from("Risposta non valida"))
             }

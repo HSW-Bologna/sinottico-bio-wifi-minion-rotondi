@@ -7,10 +7,11 @@ pub const PREAMBLE: u8 = 0x02;
 pub const HEADER_LENGTH: usize = 15;
 pub const RESPONSE_HEADER_LENGTH: usize = 14;
 
-const CODE_U16: [(u16, Code); 4] = [
+const CODE_U16: [(u16, Code); 5] = [
     (0x0101, Code::ReadInput),
     (0xFF01, Code::SetOutput),
     (0xFF03, Code::SetAddress),
+    (0xFF04, Code::ReadAddress),
     (0x400A, Code::ReadFWVersion),
 ];
 
@@ -19,6 +20,7 @@ pub enum Code {
     ReadInput,
     SetOutput,
     SetAddress,
+    ReadAddress,
     ReadFWVersion,
     Unknown(u8, u8),
 }
@@ -28,6 +30,8 @@ pub fn expected_response_len(code: Code) -> u32 {
         Code::SetAddress => 15,
         Code::ReadInput => 15,
         Code::SetOutput => 14,
+        Code::ReadFWVersion => 18,
+        Code::ReadAddress => 18,
         _ => 0,
     }
 }
@@ -261,9 +265,10 @@ impl Response {
             }
 
             if buffer.len() >= len as usize {
+                let data_len = len - Self::MIN_PACKET_LEN as u8;
                 let crc = crc(&buffer[0..len as usize - 1]);
+
                 if buffer[len as usize - 1] == crc {
-                    let data_len = len - Self::MIN_PACKET_LEN as u8;
                     return Some(Response {
                         error: false, //buffer[12] != 1,
                         response_type: ResponseType::Usual,
@@ -279,7 +284,11 @@ impl Response {
                             }
                         }),
                     });
+                } else {
+                    log::warn!("Invalid CRC ({} - {})!", buffer[len as usize - 1], crc);
                 }
+            } else {
+                log::warn!("Invalid len ({} - {})!", buffer.len(), len);
             }
         }
         return None;
